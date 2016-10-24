@@ -15,23 +15,26 @@
  * When set to 1, this means: the program must finish.
  * The value of this variable is set by a signal handler.
  */
+
+/****************************************/
+/****************************************/
 static int done = 0;
 
 /*
  * Active threads
  */
 static int active_threads = 0;
-
-/****************************************/
-/****************************************/
+struct pose2d *p2d;
 
 void bm_dispatcher_broadcast(bm_dispatcher_t dispatcher,
                              bm_datastream_t stream,
                              const uint8_t* data) {
-   pthread_mutex_lock(&dispatcher->datamutex);
+    pthread_mutex_lock(&dispatcher->datamutex);
+//    fprintf(stdout, "Sender id: %s - (%f,%f,%f)", stream->id, p2d[1].x,p2d[1].y,p2d[1].theta);
    bm_datastream_t cur = dispatcher->streams;
    ssize_t sent;
    while(cur) {
+       fprintf(stdout, "Receiver id : %s\n", cur->id);
       if(cur != stream)
          sent = cur->send(cur, data, dispatcher->msg_len);
       if(sent < dispatcher->msg_len) {
@@ -94,8 +97,9 @@ void* bm_dispatcher_thread(void* arg) {
 /****************************************/
 /****************************************/
 
-bm_dispatcher_t bm_dispatcher_new() {
+bm_dispatcher_t bm_dispatcher_new(struct pose2d *p) {
    bm_dispatcher_t d = (bm_dispatcher_t)malloc(sizeof(struct bm_dispatcher_s));
+   p2d = p;
    d->streams = NULL;
    d->stream_num = 0;
    d->start = 0;
@@ -152,7 +156,7 @@ int bm_dispatcher_stream_add(bm_dispatcher_t d,
       free(ws);
       return 0;
    }
-   /* Make sure id has not been already used */
+    // Make sure id has not been already used
    for(bm_datastream_t cur = d->streams;
        cur != NULL;
        cur = cur->next) {
@@ -165,18 +169,19 @@ int bm_dispatcher_stream_add(bm_dispatcher_t d,
          return 0;
       }
    }
-   /* Get stream type */
+   // Get stream type
    tok = strtok_r(NULL, ":", &saveptr);
    if(!tok) {
       fprintf(stderr, "Can't parse '%s'\n", s);
       free(ws);
       return 0;
    }
-   /* Create the stream */
+   // Create the stream
    bm_datastream_t stream;
    if(strcmp(tok, "tcp") == 0) {
-      /* Create new TCP stream */
+      // Create new TCP stream
       stream = (bm_datastream_t)bm_tcp_datastream_new(s);
+      fprintf(stdout, "'%i': tcp stream created\n", stream);
    }
    else if(strcmp(tok, "bt") == 0) {
       /* Create new Bluetooth stream */
@@ -230,38 +235,52 @@ int bm_dispatcher_stream_add(bm_dispatcher_t d,
 /****************************************/
 
 void sighandler(int sig) {
-   /* The program is done */
-   fprintf(stdout, "Termination requested\n");
-   done = 1;
+    /* The program is done */
+    fprintf(stdout, "Termination requested\n");
+    done = 1;
 }
 
 void bm_dispatcher_execute(bm_dispatcher_t d) {
-   /* Set signal handlers */
+/*   // Set signal handlers
    signal(SIGTERM, sighandler);
    signal(SIGINT, sighandler);
-   /* Start all threads */
+   // Start all threads
    pthread_mutex_lock(&d->startmutex);
    d->start = 1;
    pthread_mutex_unlock(&d->startmutex);
    pthread_cond_broadcast(&d->startcond);
-   /* Wait for done signal */
+   // Wait for done signal
    while(!done) {
       sleep(1);
       pthread_mutex_lock(&d->startmutex);
       if(active_threads == 0) done = 1;
       pthread_mutex_unlock(&d->startmutex);
    }
-   /* Cancel all threads */
+   // Cancel all threads
    for(bm_datastream_t s = d->streams;
        s != NULL;
        s = s->next)
       pthread_cancel(s->thread);
-   /* Wait for all threads to be done */
+   // Wait for all threads to be done
    for(bm_datastream_t s = d->streams;
        s != NULL;
        s = s->next)
-      pthread_join(s->thread, NULL);
+      pthread_join(s->thread, NULL);*/
 }
 
+int getactivet()
+{
+    return active_threads;
+}
+
+int isdone()
+{
+    return done;
+}
+
+void setdone(int i)
+{
+    done = i;
+}
 /****************************************/
 /****************************************/

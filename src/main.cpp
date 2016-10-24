@@ -2,8 +2,16 @@
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
-#include "bm_dispatcher.h"
-#include "bm_bt_datastream.h"
+extern "C" {
+    #include "bm_dispatcher.h"
+}
+#include "bm_aruco2.h"
+//#include "bm_bt_datastream.h"
+
+pose2d p2d[10];
+MarkerDetector MDetector;
+VideoCapture TheVideoCapturer;
+CameraParameters TheCameraParameters;
 
 /****************************************/
 /****************************************/
@@ -79,35 +87,76 @@ int file_parse(const char* fn,
    return 1;
 }
 
+void resetposes()
+{
+    for(int i=0;i<10;i++)
+    {
+        p2d[i].idr=i+1;p2d[i].x=0;p2d[i].y=0;p2d[i].theta=0;
+    }
+}
+
 /****************************************/
 /****************************************/
 
 int main(int argc, char* argv[]) {
-   /* Check whether arguments have been given */
+    Mat TheInputImage;
+    resetposes();
+    // read camera parameters if passed
+    TheCameraParameters.readFromXMLFile("camera.yml");
+    if (TheCameraParameters.isValid())
+        cout << "Got 3D camera calibration." << endl;
+    float TheMarkerSize = 0.1;
+    
+    ///////////  OPEN VIDEO
+    // read from camera or from  file
+    int vIdx = 0, key =0;
+    int waitTime = 1;
+    try {
+        cout << "Opening camera index " << vIdx << endl;
+    TheVideoCapturer.open(vIdx);
+    
+    // check video is open
+    if (!TheVideoCapturer.isOpened())  throw std::runtime_error("Could not open video");
+    }
+    catch(exception e){
+        
+    }
+    
+    ///// CONFIGURE DATA
+    // read first image to get the dimensions
+    TheVideoCapturer >> TheInputImage;
+    if (TheCameraParameters.isValid())
+        TheCameraParameters.resize(TheInputImage.size());
+    
+    MDetector.setDictionary(Dictionary::getTypeFromString("ARUCO"));//sets the dictionary to be employed (ARUCO,APRILTAGS,ARTOOLKIT,etc)
+    MDetector.setThresholdParams(7, 7);
+    MDetector.setThresholdParamRange(2, 0);
+    
+   // Check whether arguments have been given
    if(argc < 2) {
       usage(stdout, argv[0]);
-      return EXIT_SUCCESS;
+      return 1;
    }
-   /* Check the first argument to detect the mode */
+   // Check the first argument to detect the mode
    if(strcmp(argv[1], "scan") == 0) {
-      /* Scanning mode */
+      // Scanning mode
       if(argc > 2) {
          fprintf(stderr, "%s: mode 'scan' accepts no options\n", argv[0]);
-         return EXIT_FAILURE;
+         return -1;
       }
-      /* Execute bluetooth scan */
-      if(!bm_bt_scan())
-         return EXIT_FAILURE;
+      // Execute bluetooth scan
+//      if(!bm_bt_scan())
+//         return EXIT_FAILURE;
    }
    else {
-      /* Streaming mode */
-      /* Create the stream dispatcher */
-      bm_dispatcher_t d = bm_dispatcher_new();
-      /* Parse the arguments */
+      // Streaming mode
+      // Create the stream dispatcher
+      bm_dispatcher_t d = bm_dispatcher_new(p2d);
+      // Parse the arguments
       for(int i = 1; i < argc; ++i) {
-         /* Check options */
+         // Check options
          if(argv[i][0] == '-') {
-            /* Check whether argument starts with -f or --file */
+            // Check whether argument starts with -f or --file
             if(strcmp(argv[i], "-f") == 0 ||
                strcmp(argv[i], "--file") == 0) {
                ++i;
@@ -117,7 +166,7 @@ int main(int argc, char* argv[]) {
                }
                fprintf(stdout, "Reading streams from %s\n", argv[i]);
                if(!file_parse(argv[i], d)) {
-                  /* Some error occurred */
+                  // Some error occurred
                   bm_dispatcher_destroy(d);
                   return EXIT_FAILURE;
                }
@@ -145,21 +194,51 @@ int main(int argc, char* argv[]) {
             }
          }
          else {
-            /* Not an option, consider it a stream descriptor */
-            bm_dispatcher_stream_add(d, argv[i]);
+             // Not an option, consider it a stream descriptor
+             bm_dispatcher_stream_add(d, argv[i]);
          }
       }
-      /* Make sure required information has been passed */
+      // Make sure required information has been passed
       if(d->msg_len == 0) {
          fprintf(stderr, "%s: option -s SIZE is required, with a value for SIZE > 0\n", argv[0]);
          return EXIT_FAILURE;
       }
-      /* Parsing done, start the execution */
-      bm_dispatcher_execute(d);
-      /* All done */
+      // Parsing done, start the execution
+      //bm_dispatcher_execute(d);
+       // Set signal handlers
+       signal(SIGTERM, sighandler);
+       signal(SIGINT, sighandler);
+       // Start all threads
+       pthread_mutex_lock(&d->startmutex);
+       d->start = 1;
+       pthread_mutex_unlock(&d->startmutex);
+       pthread_cond_broadcast(&d->startcond);
+       // Wait for done signal
+       ////////// GO !!!!
+       do {
+           getposes(MDetector, TheVideoCapturer, TheCameraParameters, TheMarkerSize, p2d, 0);
+           cout << "\r Khepera " << p2d[1].idr << " : " << p2d[1].x << " m, " << p2d[1].y << " m, " << p2d[1].theta << " rad" << endl;
+           pthread_mutex_lock(&d->startmutex);
+           if(getactivet() == 0) setdone(1);
+           pthread_mutex_unlock(&d->startmutex);
+           key = cv::waitKey(waitTime); // wait for key to be pressed
+       } while (key != 27 && (TheVideoCapturer.grab() ) && !isdone());
+       // Cancel all threads
+       for(bm_datastream_t s = d->streams;
+           s != NULL;
+           s = s->next)
+           pthread_cancel(s->thread);
+       // Wait for all threads to be done
+       for(bm_datastream_t s = d->streams;
+           s != NULL;
+           s = s->next)
+           pthread_join(s->thread, NULL);
+
+      // All done
       bm_dispatcher_destroy(d);
    }
-   return EXIT_SUCCESS;
+
+   return 1;
 }
 
 /****************************************/

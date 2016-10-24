@@ -4,7 +4,11 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <pthread.h>
-
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <signal.h>
+#include <unistd.h>
 /**
  * A generic data stream.
  */
@@ -25,6 +29,12 @@ struct bm_datastream_s {
       BM_DATASTREAM_READY,
       BM_DATASTREAM_ERROR
    } status;
+   /* robot pose */
+    struct relpose2d{
+        float dx;    //meters
+        float dy;    //meters
+        float dtheta;//radians
+    } dp2d;
    /* "unknown", "ready", or error message */
    char* status_desc;
    /* Stream descriptor */

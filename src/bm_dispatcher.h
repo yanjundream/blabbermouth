@@ -2,6 +2,7 @@
 #define BM_DISPATCHER_H
 
 #include "bm_datastream.h"
+#include "bm_pose2d.h"
 
 /*
  * The dispatcher state.
@@ -28,7 +29,7 @@ typedef struct bm_dispatcher_s* bm_dispatcher_t;
  * Creates a new dispatcher.
  * @return A new dispatcher instance.
  */
-extern bm_dispatcher_t bm_dispatcher_new();
+extern bm_dispatcher_t bm_dispatcher_new(struct pose2d *p);
 
 /*
  * Destroys the dispatcher.
@@ -50,5 +51,14 @@ extern int bm_dispatcher_stream_add(bm_dispatcher_t d,
  * @param d The dispatcher
  */
 extern void bm_dispatcher_execute(bm_dispatcher_t d);
+
+
+extern int getactivet();
+
+extern int isdone();
+
+extern void setdone(int i);
+
+extern void sighandler(int sig);
 
 #endif

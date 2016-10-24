@@ -224,9 +224,9 @@ ssize_t bm_tcp_datastream_recv(void* ds,
 /****************************************/
 
 bm_tcp_datastream_t bm_tcp_datastream_new(const char* desc) {
-   /* Allocate memory */
+   // Allocate memory
    bm_tcp_datastream_t this = malloc(sizeof(struct bm_tcp_datastream_s));
-   /* Initialize parent */
+   fprintf(stdout, "Initialize parent\n");
    bm_datastream_init(&this->parent,
                       desc,
                       bm_tcp_datastream_destroy,
@@ -238,7 +238,7 @@ bm_tcp_datastream_t bm_tcp_datastream_new(const char* desc) {
       bm_tcp_datastream_destroy(this);
       return NULL;
    }
-   /* Set local attributes */
+   fprintf(stdout, "Set local attributes\n");
    this->stream = -1;
    if(!bm_tcp_datastream_parse(this, desc)) {
       bm_tcp_datastream_destroy(this);

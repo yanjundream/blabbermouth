@@ -26,6 +26,11 @@ static int done = 0;
 static int active_threads = 0;
 struct pose2d *p2d;
 
+void interceptlocalisation(const uint8_t* data, int msg_len)
+{
+
+}
+
 void bm_dispatcher_broadcast(bm_dispatcher_t dispatcher,
                              bm_datastream_t stream,
                              const uint8_t* data) {
@@ -35,8 +40,10 @@ void bm_dispatcher_broadcast(bm_dispatcher_t dispatcher,
    ssize_t sent;
    while(cur) {
        fprintf(stdout, "Receiver id : %s\n", cur->id);
-      if(cur != stream)
+      if(cur != stream){
+	interceptlocalisation(data, dispatcher->msg_len);
          sent = cur->send(cur, data, dispatcher->msg_len);
+	}
       if(sent < dispatcher->msg_len) {
          fprintf(stderr, "sent %zd bytes instead of %zu to %s: %s\n",
                  sent,

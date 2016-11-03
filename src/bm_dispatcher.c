@@ -3,9 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
+
+#include "server.h"
+#include "bm_pose2d.h"
 
 /****************************************/
 /****************************************/
@@ -23,17 +27,55 @@ static int done = 0;
 static int active_threads = 0;
 
 /****************************************/
-/****************************************/
+/****************cyj*********************/
+extern pose2d pose_opt[];
+
+pose2d *p2d;
+
+void computeRB(char *Sid, char *Rid, float *range, float *bearing)
+{
+	server();
+	p2d=pose_opt;
+	int SidI = strtol(Sid+2,NULL,10);
+	int RidI = strtol(Rid+2,NULL,10);
+	*range = sqrt(pow(p2d[SidI].x-p2d[RidI].x,2)+pow(p2d[SidI].y-p2d[RidI].y,2));
+	*bearing = p2d[SidI].theta-p2d[RidI].theta;
+        fprintf(stdout, "Sender id: %d - (%.2fm,%.2frad) - Receiver id : %d\n", SidI, RidI, *range, *bearing);
+	return;
+}
+
+void interceptlocalisation(uint8_t* data, int msg_len, float range, float bearing)
+{
+     // Update Buzz neighbors information
+      float elevation = 0;
+      size_t tot = sizeof(uint16_t);
+      memcpy(data + tot, &range, sizeof(float));
+      tot += sizeof(float);
+      memcpy(data + tot, &bearing, sizeof(float));
+      tot += sizeof(float);
+      memcpy(data + tot, &elevation, sizeof(float));
+      return;
+}
+
 
 void bm_dispatcher_broadcast(bm_dispatcher_t dispatcher,
                              bm_datastream_t stream,
-                             const uint8_t* data) {
-   pthread_mutex_lock(&dispatcher->datamutex);
-   bm_datastream_t cur = dispatcher->streams;
-   ssize_t sent;
-   while(cur) {
-      if(cur != stream)
+                             uint8_t* data) {
+ //   printf("+++++++++++++++%s\n", data);
+ //   printf("+++++++++++++++%s\n", *data);
+    pthread_mutex_lock(&dispatcher->datamutex);
+    bm_datastream_t cur = dispatcher->streams;
+    ssize_t sent;
+    float range=0,bearing=0;
+    while(cur) {
+      if(cur != stream){
+    //printf("Now is in broadcast function and before server\n");
+
+	computeRB(stream->id, cur->id, &range, &bearing);
+     //fprintf(stdout, "Sender id: %d - (%.2fm,%.2frad) - Receiver id : %d\n", stream->id, range, bearing, cur->id);
+	interceptlocalisation(data, dispatcher->msg_len, range, bearing);
          sent = cur->send(cur, data, dispatcher->msg_len);
+	}
       if(sent < dispatcher->msg_len) {
          fprintf(stderr, "sent %zd bytes instead of %zu to %s: %s\n",
                  sent,
@@ -46,8 +88,11 @@ void bm_dispatcher_broadcast(bm_dispatcher_t dispatcher,
    pthread_mutex_unlock(&dispatcher->datamutex);
 }
 
+
+
+/****************cyj*********************/
 /****************************************/
-/****************************************/
+
 
 struct bm_dispatcher_thread_data_s {
    bm_dispatcher_t dispatcher;

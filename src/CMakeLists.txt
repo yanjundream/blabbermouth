@@ -7,6 +7,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR})
 find_package(Pthreads REQUIRED)
 find_package(Bluez REQUIRED)
 
+#set extern libraries  
+SET(LIBRARIES  
+libm.so  
+) 
+
 # Compilation flags
 include_directories(${PTHREADS_INCLUDE_DIR} ${BLUEZ_INCLUDE_DIRS})
 add_definitions(-Wall ${PTHREADS_DEFINITIONS})
@@ -17,7 +22,10 @@ add_executable(blabbermouth
   bm_tcp_datastream.h bm_tcp_datastream.c
   bm_bt_datastream.h bm_bt_datastream.c
   bm_dispatcher.h bm_dispatcher.c
+  bm_pose2d.h
+  server.h server.c
   main.c)
 target_link_libraries(blabbermouth
   ${PTHREADS_LIBRARY}
-  ${BLUEZ_LIBRARIES})
+  ${BLUEZ_LIBRARIES}
+  ${LIBRARIES})
